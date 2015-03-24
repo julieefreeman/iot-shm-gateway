@@ -22,14 +22,16 @@ class Producer(threading.Thread):
     daemon = True
 
     def run(self):
-        stop = false
+        stop = False
         startTime = time.time()
         currTime = startTime
-        ser = serial.Serial('/dev/ttyUSB1', 9600)
+        ser = serial.Serial('/dev/ttyUSB0', 9600)
         reading = [0, 0, 0, 0]
-        while(!stop):
+        i = 0
+        while(not stop and i < 108/4):
             reading = [ser.read(), ser.read(), ser.read(), ser.read()]
             print(reading)
+            i+=1
             #print(reading[:len(reading)-2] + "," + str(currTime) + "\n")
         ser.close()
         
