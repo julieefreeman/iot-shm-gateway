@@ -26,7 +26,7 @@ xbee = XBee(ser)
 while True:
     try:
         response = xbee.wait_read_frame()
-        print response
+        print(response)
     except KeyboardInterrupt:
         break
         
