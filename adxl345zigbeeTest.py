@@ -6,10 +6,12 @@ def adxl345Test():
 	currTime = startTime
 	print(startTime)
 	print(currTime)
-	ser = serial.Serial('/dev/ttyUSB0', 9600)
-	while(currTime - startTime < 10):
+	ser = serial.Serial('/dev/tty.usbserial-DA013M0S', 9600)
+	print("connected")
+	while(True == True):
 		currTime = time.time()
-		reading = ser.read()
+		print("about to read")
+		reading = ser.readline()
 		print(reading)
 		#print(reading[:len(reading)-2] + "," + str(currTime) + "\n")
 	ser.close()
