@@ -19,7 +19,7 @@ class XBee():
             chunk = self.serial.read(remaining)
             remaining -= len(chunk)
             self.RxBuff.extend(chunk)
-
+        print(self.RxBuff)
         msgs = self.RxBuff.split(bytes(b'\x7E'))
         for msg in msgs[:-1]:
             self.Validate(msg)
@@ -44,18 +44,22 @@ class XBee():
         #  LSB, MSB, Type, Source Address(2), RSSI,
         #  Options, 1 byte data, checksum
         if (len(msg) - msg.count(bytes(b'0x7D'))) < 9:
+            length = len(msg) - msg.count(bytes(b'0x7D'))
+            print("length too short. length= ", length, " ", len(msg) )
             return False
 
         # All bytes in message must be unescaped before validating content
         frame = self.Unescape(msg)
-
+        print("unescaped")
         LSB = frame[1]
         # Frame (minus checksum) must contain at least length equal to LSB
         if LSB > (len(frame[2:]) - 1):
+            print("frame minus checksum must contain at least length equal to lsb")
             return False
 
         # Validate checksum
         if (sum(frame[2:3+LSB]) & 0xFF) != 0xFF:
+            print("failed checksum")
             return False
 
         print("Rx: " + self.format(bytearray(b'\x7E') + msg))

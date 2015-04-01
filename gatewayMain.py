@@ -4,7 +4,7 @@ from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
 from kafka.producer import SimpleProducer
 from collections import deque
-
+import XBee
 fft_size = 64
 sensor_mac_addresses = []
 data_queue = deque([])
@@ -21,25 +21,16 @@ data_queue = deque([])
 
 #read data from Xbee
 class XReceiver(threading.Thread):
+    packet = dict()
     daemon = True
-
+    
     def run(self):
         stop = False
-        startTime = time.time()
-        currTime = startTime
-        ser = serial.Serial('/dev/ttyUSB0', 9600)
+        #ser = serial.Serial('/dev/ttyUSB0', 9600)
         reading = [0, 0, 0, 0]
         i = 0
         while(not stop and i < 108/4):
-            reading = [ser.read(), ser.read(), ser.read(), ser.read()]
-            print(reading)
             i+=1
-            #print(reading[:len(reading)-2] + "," + str(currTime) + "\n")
-        ser.close()
-        
-        #while True:
-            reading = ser.readline()
-            data_queue.append(reading) 
         ser.close
 
 #format data and send to Kafka
@@ -47,7 +38,7 @@ class KafkaProducer(threading.Thread):
     daemon = True
 
     def run(self):
-	client = KafkaClient('ip-72-131-4-78-ec2.internal:6667')
+        client = KafkaClient('ip-72-131-4-78-ec2.internal:6667')
         producer = SimpleProducer(client)        
 
         while True:
