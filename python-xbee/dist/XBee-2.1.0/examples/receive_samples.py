@@ -11,6 +11,7 @@ received from a remote XBee.
 """
 
 from xbee import ZigBee
+from digimesh import DigiMesh
 import serial
 
 PORT = '/dev/ttyUSB0'
@@ -26,8 +27,15 @@ xbee = ZigBee(ser)
 while True:
     try:
         print("about to read.")
+        #response = ser.read()
         response = xbee.wait_read_frame()
-        print(response)
+        print("source address64 is: ")
+        print("".join('{:02x} '.format(x) for x in response['source_addr_long']))
+        print("source address16 is: ")
+        print("".join('{:02x} '.format(x) for x in response['source_addr']))
+        print("rf data is: ")
+        print("".join('{:02x} '.format(x) for x in response['rf_data']))
+
     except KeyboardInterrupt:
         break
         

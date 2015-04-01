@@ -55,7 +55,7 @@ class APIFrame:
         be 0xFF.
         """
         total = 0
-        
+        #print("checksum in packet = ", chksum)
         # Add together all bytes
         for byte in self.data:
             total += byteToInt(byte)
@@ -67,6 +67,7 @@ class APIFrame:
         total &= 0xFF
         
         # Check result
+        #print("total = ", total)
         return total == 0xFF
 
     def len_bytes(self):
@@ -133,6 +134,7 @@ class APIFrame:
             byte = intToByte(byteToInt(byte) ^ 0x20)
             self._unescape_next_byte = False
         elif self.escaped and byte == APIFrame.ESCAPE_BYTE:
+            #print("escape byte")
             self._unescape_next_byte = True
             return
 
@@ -168,12 +170,15 @@ class APIFrame:
         
         # Unpack it
         data_len = struct.unpack("> h", raw_len)[0]
-        
+        #print("data length = ",data_len)
         # Read the data
         data = self.raw_data[3:3 + data_len]
+#        print("data = ", data)
+#        print("raw_data = ", self.raw_data)
         chksum = self.raw_data[-1]
 
         # Checksum check
         self.data = data
         if not self.verify(chksum):
+            print("did not pass checksum")
             raise ValueError("Invalid checksum")

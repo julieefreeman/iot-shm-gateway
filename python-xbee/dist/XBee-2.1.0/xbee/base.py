@@ -48,7 +48,7 @@ class XBeeBase(threading.Thread):
                  XBee device's documentation for more information.
     """
                        
-    def __init__(self, ser, shorthand=True, callback=None, escaped=False):
+    def __init__(self, ser, shorthand=True, callback=None, escaped=True):
         super(XBeeBase, self).__init__()
         self.serial = ser
         self.shorthand = shorthand
@@ -119,7 +119,7 @@ class XBeeBase(threading.Thread):
                     continue
                 
                 byte = self.serial.read()
-
+                #print(byte)
                 if byte != APIFrame.START_BYTE:
                     continue
 
@@ -129,9 +129,10 @@ class XBeeBase(threading.Thread):
                     
                 while(frame.remaining_bytes() > 0):
                     byte = self.serial.read()
-                    
+                    #print(byte)
                     if len(byte) == 1:
                         frame.fill(byte)
+                    #print("".join("%02x " % b for b in frame.raw_data))
 
                 try:
                     # Try to parse and return result
@@ -141,7 +142,7 @@ class XBeeBase(threading.Thread):
                     if len(frame.data) == 0:
                         frame = APIFrame()
                         continue
-                        
+                    #print(frame.data) 
                     return frame
                 except ValueError:
                     # Bad frame, so restart
@@ -217,6 +218,7 @@ class XBeeBase(threading.Thread):
         # If the spec doesn't exist, raise exception
         packet_id = data[0:1]
         try:
+            #print("packet_id = ", packet_id)
             packet = self.api_responses[packet_id]
         except AttributeError:
             raise NotImplementedError("API response specifications could not be found; use a derived class which defines 'api_responses'.")
@@ -397,6 +399,8 @@ class XBeeBase(threading.Thread):
         """
         
         frame = self._wait_for_frame()
+        #print(frame.data)
+        #print("".join('{:02x} '.format(x) for x in frame.data))
         return self._split_response(frame.data)
         
     def __getattr__(self, name):

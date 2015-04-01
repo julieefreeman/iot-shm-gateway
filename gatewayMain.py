@@ -4,33 +4,46 @@ from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
 from kafka.producer import SimpleProducer
 from collections import deque
-import XBee
-fft_size = 64
+from xbee import ZigBee
+import serial
+import struct
+
+fft_size = 128
 sensor_mac_addresses = []
 data_queue = deque([])
-#from sensor:
-#unix time
-#sensor/xbee id
-#freq, xmag, ymag, zmag
-#...
+PORT = '/dev/ttyUSB0'
+BAUD_RATE = 9600
+TIME_SIZE = 4
+TYPE_SIZE = 1
 
-#12354353426
-#345254
-#36, 23, 45, 67
-#37, 32, 43, 32sensor_mac_addressessensor_mac_addresses
-
-#read data from Xbee
-class XReceiver(threading.Thread):
-    packet = dict()
+class XBeeReceiver(threading.Thread):
     daemon = True
-    
+
+    def parse(self, response):
+        packet = dict()
+        packet["sensor_id"] = (''.join('{:02x}-'.format(x) for x in response["source_addr_long"]))[:-1]
+        data_length = len(response["rf_data"])
+        time_start = 0
+        fft_start = time_start + TIME_SIZE
+        type_start = fft_start + int(fft_size/2)
+
+        packet["fft"] = [x for x in response["rf_data"][fft_start : type_start]]
+        readingTypeArr = response["rf_data"][type_start : data_length]
+        packet["reading_type"] = int.from_bytes(readingTypeArr, byteorder='big', signed=False)
+        timeArr = response["rf_data"][time_start : fft_start]
+        packet["time"] = int.from_bytes(timeArr, byteorder='big', signed=False)
+        print(packet)
+        return packet
+
+
     def run(self):
         stop = False
-        #ser = serial.Serial('/dev/ttyUSB0', 9600)
-        reading = [0, 0, 0, 0]
+        ser = serial.Serial(PORT, BAUD_RATE)
+        xbee = ZigBee(ser)
         i = 0
-        while(not stop and i < 108/4):
-            i+=1
+        while(True):
+            response = xbee.wait_read_frame()
+            data_queue.extend(self.parse(response))
         ser.close
 
 #format data and send to Kafka
@@ -63,29 +76,8 @@ class KafkaProducer(threading.Thread):
 #            print(message)
 
 def main():    
-    #Create Frequency Vector
-    fft_size=1024
-    fs=92
-    freq_array=np.array((1*fs/fft_size))
-    for i in range(2,int(fft_size/2)):
-        freq_i=np.array((i*fs/fft_size))
-        freq_array=np.vstack((freq_array,freq_i))
-
-    sensor_mac_addresses=[]
-    #Create Frequency Vector
-    #freq_array=np.array((1))
-    #for i in range(2,int(fft_size/2)):
-    #    freq_i=np.array((i*fs/fft_size))
-    #    freq_array=np.vstack((freq_array,freq_i))
-    with open('sensor_macs.csv', 'rt') as f:
-        print('opening csv')
-        reader=csv.reader(f)
-        for row in reader:
-            sensor_mac_addresses += row
-    print(sensor_mac_addresses)
-
     threads = [
-        KafkaProducer(),
+       # KafkaProducer(),
         #KafkaConsumer(), #for classifying feature
 	XBeeReceiver()
     ]
@@ -93,6 +85,8 @@ def main():
     for t in threads:
         t.start()
     time.sleep(5)
+    while(True):
+        print
 
 if __name__ == '__main__':
     main()
