@@ -5,35 +5,71 @@ from kafka.consumer import SimpleConsumer
 from kafka.producer import SimpleProducer
 from collections import deque
 from xbee import ZigBee
+import json
 import serial
 import struct
+import time
 
-fft_size = 128
 sensor_mac_addresses = []
 data_queue = deque([])
 PORT = '/dev/ttyUSB0'
 BAUD_RATE = 9600
+
 TIME_SIZE = 4
 TYPE_SIZE = 1
+SAMPLING_FREQ_SIZE = 4
+FFT_SIZE_SIZE = 4
+
+class SensorPacket:
+    def __init__(self, sensorId, time, readingType, samplingFreq, fftSize, fftMags):
+        self.sensorId = sensorId
+        self.time = time
+        self.readingType = readingType
+        self.samplingFreq = samplingFreq
+        self.fftSize = fftSize
+        self.fftMags = fftMags
+    def __str__(self):
+        return "sensorId="+self.sensorId + ", time=" + str(self.time) + ", readingType=" + str(self.readingType) + ", samplingFreq="+str(self.samplingFreq) + ", fftSize=" + str(self.fftSize) + ", fftMags=" + str(self.fftMags)
+
+    def toJson(self):
+        data = {"sensorId":self.sensorId, "time":self.time, "readingType":self.readingType, "samplingFreq":self.samplingFreq, "fftSize":self.fftSize, "fftMags":self.fftMags}
+        return json.dumps(data).encode('utf-8')
 
 class XBeeReceiver(threading.Thread):
     daemon = True
 
+    def bytesToInt(self, arr):
+        return int.from_bytes(arr, byteorder='little', signed=False)
+
     def parse(self, response):
         packet = dict()
-        packet["sensor_id"] = (''.join('{:02x}-'.format(x) for x in response["source_addr_long"]))[:-1]
-        data_length = len(response["rf_data"])
-        time_start = 0
-        fft_start = time_start + TIME_SIZE
-        type_start = fft_start + int(fft_size/2)
+        payload = response["rf_data"]
+        sensorId = (''.join('{:02x}-'.format(x) for x in response["source_addr_long"]))[:-1]
+        data_length = len(payload)
 
-        packet["fft"] = [x for x in response["rf_data"][fft_start : type_start]]
-        readingTypeArr = response["rf_data"][type_start : data_length]
-        packet["reading_type"] = int.from_bytes(readingTypeArr, byteorder='big', signed=False)
-        timeArr = response["rf_data"][time_start : fft_start]
-        packet["time"] = int.from_bytes(timeArr, byteorder='big', signed=False)
-        print(packet)
-        return packet
+        time_start = 0
+        currTime = int(time.time())
+ 
+        type_start = time_start + TIME_SIZE
+        readingTypeArr = payload[type_start : type_start + TYPE_SIZE]
+        readingType = self.bytesToInt(readingTypeArr)       
+        
+        sampling_freq_start = type_start + TYPE_SIZE
+        samplingFreqArr = payload[sampling_freq_start : sampling_freq_start + SAMPLING_FREQ_SIZE]
+        samplingFreq = self.bytesToInt(samplingFreqArr) 
+
+        fft_size_start = sampling_freq_start + SAMPLING_FREQ_SIZE
+        fftSizeArr = payload[fft_size_start : fft_size_start + FFT_SIZE_SIZE]
+        fftSize = self.bytesToInt(fftSizeArr)
+
+        fft_start = fft_size_start + FFT_SIZE_SIZE        
+        fftMags = [x for x in payload[fft_start:fft_start + int(fftSize/2)]]
+        
+#        print(str(len(payload)))
+                
+#        print(packet)
+#        print(data_length)
+        return SensorPacket(sensorId, currTime, readingType, samplingFreq, fftSize, fftMags)
 
 
     def run(self):
@@ -43,7 +79,7 @@ class XBeeReceiver(threading.Thread):
         i = 0
         while(True):
             response = xbee.wait_read_frame()
-            data_queue.extend(self.parse(response))
+            data_queue.append(self.parse(response))
         ser.close
 
 #format data and send to Kafka
@@ -51,16 +87,14 @@ class KafkaProducer(threading.Thread):
     daemon = True
 
     def run(self):
-        client = KafkaClient('ip-72-131-4-78-ec2.internal:6667')
+        client = KafkaClient('ip-172-31-28-55.ec2.internal:6667')
         producer = SimpleProducer(client)        
-
         while True:
             if len(data_queue)!=0:
                 data = data_queue.popleft()
-                #format data here
-                print(data)
+                print(data.toJson())
                 if True: # for when we send to storm topic
-                    producer.send_messages('storm_topic',data)
+                    producer.send_messages('shm', data.toJson())
                 else: # for when we send to create the classifier
                     producer.send_messages('classifier_topic',data)
 
@@ -77,7 +111,7 @@ class KafkaProducer(threading.Thread):
 
 def main():    
     threads = [
-       # KafkaProducer(),
+        KafkaProducer(),
         #KafkaConsumer(), #for classifying feature
 	XBeeReceiver()
     ]

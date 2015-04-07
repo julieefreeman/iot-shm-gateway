@@ -45,7 +45,7 @@ class KafkaProducer(threading.Thread):
 
 def main():    
     global freq_array 
-    client = KafkaClient('ip-172-31-35-81.ec2.internal:6667')
+    client = KafkaClient('ip-172-31-28-55.ec2.internal:6667')
     producer = SimpleProducer(client)    
     
     fft_size=1000
