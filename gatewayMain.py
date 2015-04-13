@@ -42,34 +42,32 @@ class XBeeReceiver(threading.Thread):
         return int.from_bytes(arr, byteorder='little', signed=False)
 
     def parse(self, response):
-        packet = dict()
-        payload = response["rf_data"]
-        sensorId = (''.join('{:02x}-'.format(x) for x in response["source_addr_long"]))[:-1]
-        data_length = len(payload)
+        try:
+            payload = response["rf_data"]
+            sensorId = (''.join('{:02x}-'.format(x) for x in response["source_addr_long"]))[:-1]
+            data_length = len(payload)
 
-        time_start = 0
-        currTime = int(time.time())
- 
-        type_start = time_start + TIME_SIZE
-        readingTypeArr = payload[type_start : type_start + TYPE_SIZE]
-        readingType = self.bytesToInt(readingTypeArr)       
-        
-        sampling_freq_start = type_start + TYPE_SIZE
-        samplingFreqArr = payload[sampling_freq_start : sampling_freq_start + SAMPLING_FREQ_SIZE]
-        samplingFreq = self.bytesToInt(samplingFreqArr) 
+            time_start = 0
+            currTime = int(time.time())
+     
+            type_start = time_start + TIME_SIZE
+            readingTypeArr = payload[type_start : type_start + TYPE_SIZE]
+            readingType = self.bytesToInt(readingTypeArr)       
+            
+            sampling_freq_start = type_start + TYPE_SIZE
+            samplingFreqArr = payload[sampling_freq_start : sampling_freq_start + SAMPLING_FREQ_SIZE]
+            samplingFreq = self.bytesToInt(samplingFreqArr) 
 
-        fft_size_start = sampling_freq_start + SAMPLING_FREQ_SIZE
-        fftSizeArr = payload[fft_size_start : fft_size_start + FFT_SIZE_SIZE]
-        fftSize = self.bytesToInt(fftSizeArr)
+            fft_size_start = sampling_freq_start + SAMPLING_FREQ_SIZE
+            fftSizeArr = payload[fft_size_start : fft_size_start + FFT_SIZE_SIZE]
+            fftSize = self.bytesToInt(fftSizeArr)
 
-        fft_start = fft_size_start + FFT_SIZE_SIZE        
-        fftMags = [x for x in payload[fft_start:fft_start + int(fftSize/2)]]
-        
-#        print(str(len(payload)))
-                
-#        print(packet)
-#        print(data_length)
-        return SensorPacket(sensorId, currTime, readingType, samplingFreq, fftSize, fftMags)
+            fft_start = fft_size_start + FFT_SIZE_SIZE        
+            fftMags = [x for x in payload[fft_start:fft_start + int(fftSize/2)]]
+            return SensorPacket(sensorId, currTime, readingType, samplingFreq, fftSize, fftMags)
+        except Exception:
+            print("null")
+            return None
 
 
     def run(self):
@@ -78,8 +76,12 @@ class XBeeReceiver(threading.Thread):
         xbee = ZigBee(ser)
         i = 0
         while(True):
+            print("about to receive")
             response = xbee.wait_read_frame()
-            data_queue.append(self.parse(response))
+            print(response)
+            parsed = self.parse(response)
+            if(self.parse(response) != None):
+                data_queue.append(parsed)
         ser.close
 
 #format data and send to Kafka
@@ -89,12 +91,16 @@ class KafkaProducer(threading.Thread):
     def run(self):
         client = KafkaClient('ip-172-31-28-55.ec2.internal:6667')
         producer = SimpleProducer(client)        
+        x = 0
         while True:
             if len(data_queue)!=0:
                 data = data_queue.popleft()
-                print(data.toJson())
+                json = data.toJson()
+                #if(x%30 == 0 or x%30 == 1 or x%30 == 2):
+                print(json)
+                x+=1
                 if True: # for when we send to storm topic
-                    producer.send_messages('shm', data.toJson())
+                    producer.send_messages('shm', json)
                 else: # for when we send to create the classifier
                     producer.send_messages('classifier_topic',data)
 
