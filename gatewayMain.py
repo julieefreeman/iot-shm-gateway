@@ -46,11 +46,9 @@ class XBeeReceiver(threading.Thread):
             payload = response["rf_data"]
             sensorId = (''.join('{:02x}-'.format(x) for x in response["source_addr_long"]))[:-1]
             data_length = len(payload)
-
-            time_start = 0
             currTime = int(time.time())
-     
-            type_start = time_start + TIME_SIZE
+
+            type_start = 0
             readingTypeArr = payload[type_start : type_start + TYPE_SIZE]
             readingType = self.bytesToInt(readingTypeArr)       
             
@@ -75,13 +73,16 @@ class XBeeReceiver(threading.Thread):
         ser = serial.Serial(PORT, BAUD_RATE)
         xbee = ZigBee(ser)
         i = 0
+        count = 0
         while(True):
-            print("about to receive")
             response = xbee.wait_read_frame()
-            print(response)
             parsed = self.parse(response)
             if(self.parse(response) != None):
-                data_queue.append(parsed)
+                if(len([x for x in parsed.fftMags if(x == 0)]) == len(parsed.fftMags)):
+                    count+= 1
+                    print("TOTAL NONZEROS THUS FAR: " + str(count))
+                else:
+                    data_queue.append(parsed)
         ser.close
 
 #format data and send to Kafka
